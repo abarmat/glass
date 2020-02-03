@@ -1,0 +1,12 @@
+version: "3.7"
+
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: glass
+      POSTGRES_PASSWORD: glass
+      POSTGRES_DB: glass
+    ports:
+      - "5432:5432"
