@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-pg/pg/v9"
 )
 
 // Scene information
@@ -43,4 +45,35 @@ func PointerToCoords(pointer string) (x int, y int, err error) {
 		return 0, 0, err
 	}
 	return x, y, nil
+}
+
+// GetScenesLastTimestamp finds the timestamp of the last published scene
+func GetScenesLastTimestamp(db *pg.DB) (int64, error) {
+	var scene Scene
+
+	err := db.Model(&scene).
+		Column("published_at").
+		Order("published_at ASC").
+		Select()
+	if err != nil {
+		return 0, err
+	}
+
+	return scene.PublishedAt.Unix(), nil
+}
+
+// GetScenesPointersFromDate returns scene pointer info after a publication date
+func GetScenesPointersFromDate(db *pg.DB, from int64) (*[]Scene, error) {
+	var scenes []Scene
+
+	err := db.Model(&scenes).
+		Column("id", "pointers", "published_at").
+		Order("published_at ASC").
+		Where("published_at >= ?", time.Unix(from, 0)).
+		Select()
+	if err != nil {
+		return nil, err
+	}
+
+	return &scenes, nil
 }

@@ -52,43 +52,25 @@ func (indexer *ContentIndexer) indexEntity(logger *log.Entry, entityType string,
 	}
 }
 
-func (indexer *ContentIndexer) runWorker(id int, jobs chan Job, wg *sync.WaitGroup) {
-	defer wg.Done()
-	logger := log.WithFields(log.Fields{"wk": id})
-	for {
-		select {
-		case job, more := <-jobs:
-			{
-				if !more {
-					return
-				}
-				indexer.indexEntity(logger, job.EntityType, job.EntityID)
-			}
-		}
-	}
-}
-
 func (indexer *ContentIndexer) indexTiles(from int64) error {
 	logger := log.WithField("index", "tiles")
 
-	var scenes []models.Scene
-	err := indexer.DB.Model(&scenes).
-		Column("id", "pointers", "published_at").
-		Order("published_at ASC").
-		Where("published_at >= ?", time.Unix(from, 0)).
-		Select()
+	scenes, err := models.GetScenesPointersFromDate(indexer.DB, from)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("(Tiles) Updating %d scenes tiles", len(scenes))
-	for _, scene := range scenes {
+	logger.Printf("(Tiles) Updating %d scenes tiles", len(*scenes))
+	for _, scene := range *scenes {
 		logger.WithFields(
-			log.Fields{"scene": scene.ID, "n_tiles": len(scene.Pointers)},
+			log.Fields{
+				"scene":   scene.ID,
+				"n_tiles": len(scene.Pointers),
+			},
 		).Info("Updating tile")
 
 		for _, pointer := range scene.Pointers {
-			// parse pointer
+			// parse scene pointer
 			x, y, err := models.PointerToCoords(pointer)
 			if err != nil {
 				logger.Warn(err)
@@ -96,11 +78,8 @@ func (indexer *ContentIndexer) indexTiles(from int64) error {
 			}
 
 			// insert or update tile
-			tile := Tile{x, y, scene.ID, scene.PublishedAt, time.Now()}
-			_, err = indexer.DB.Model(&tile).
-				OnConflict("(x, y) DO UPDATE").
-				Set("scene_id = excluded.scene_id, published_at = excluded.published_at").
-				Insert()
+			tile := models.Tile{x, y, scene.ID, scene.PublishedAt, time.Now()}
+			err = models.UpsertTile(indexer.DB, &tile)
 			if err != nil {
 				logger.Warn(err)
 				continue
@@ -111,21 +90,7 @@ func (indexer *ContentIndexer) indexTiles(from int64) error {
 	return nil
 }
 
-func (indexer *ContentIndexer) getLastTimestamp() (int64, error) {
-	var scene models.Scene
-
-	err := indexer.DB.Model(&scene).
-		Column("published_at").
-		Order("published_at ASC").
-		Select()
-	if err != nil {
-		return 0, err
-	}
-
-	return scene.PublishedAt.Unix(), nil
-}
-
-func (indexer *ContentIndexer) indexHistory(jobs chan Job) error {
+func (indexer *ContentIndexer) processHistory(jobs chan Job) error {
 	queryOffset := 0
 
 	for {
@@ -150,6 +115,22 @@ func (indexer *ContentIndexer) indexHistory(jobs chan Job) error {
 	return nil
 }
 
+func (indexer *ContentIndexer) runWorker(id int, jobs chan Job, wg *sync.WaitGroup) {
+	defer wg.Done()
+	logger := log.WithFields(log.Fields{"wk": id})
+	for {
+		select {
+		case job, more := <-jobs:
+			{
+				if !more {
+					return
+				}
+				indexer.indexEntity(logger, job.EntityType, job.EntityID)
+			}
+		}
+	}
+}
+
 func (indexer *ContentIndexer) runEpoch() error {
 	// start workers to handle indexing
 	log.Printf("(Indexer) Starting %d workers", indexer.indexWorkers)
@@ -161,7 +142,7 @@ func (indexer *ContentIndexer) runEpoch() error {
 	}
 
 	// replay history
-	err := indexer.indexHistory(jobs)
+	err := indexer.processHistory(jobs)
 	if err != nil {
 		return err
 	}

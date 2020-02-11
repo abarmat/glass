@@ -11,9 +11,6 @@ import (
 	"melonwave.com/glass/models"
 )
 
-// TODO: evaluate if indexer *ContentIndexer should be -> db and client
-// TODO: move this to indexes folder
-
 // SceneIndex is a runnable scene index
 type SceneIndex struct{}
 
