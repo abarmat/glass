@@ -1,9 +1,10 @@
 package core
 
 import (
-	"log"
 	"os"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/joho/godotenv"
 )
@@ -13,23 +14,21 @@ type Options struct {
 	DatabaseURL      string
 	ContentServerURL string
 	IndexWorkers     int
+	IndexInterval    int
 }
 
 // NewOptionsFromEnv returns app options based on env
 func NewOptionsFromEnv() (Options, error) {
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("Error loading .env file")
+		log.Error("Error loading .env file")
 	}
 
 	opts := Options{}
 	opts.DatabaseURL = os.Getenv("DATABASE_URL")
 	opts.ContentServerURL = os.Getenv("CONTENT_SERVER_URL")
-	indexWorkers, err := strconv.Atoi(os.Getenv("NUM_WORKERS"))
-	if err != nil {
-		return opts, err
-	}
-	opts.IndexWorkers = indexWorkers
+	opts.IndexWorkers, err = strconv.Atoi(os.Getenv("NUM_WORKERS"))
+	opts.IndexInterval, err = strconv.Atoi(os.Getenv("INDEX_INTERVAL"))
 
-	return opts, nil
+	return opts, err
 }

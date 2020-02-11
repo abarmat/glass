@@ -1,14 +1,26 @@
 package api
 
-// ServerStatus is a struct to hold the server status
+// ServerStatus holds the server status
 type ServerStatus struct {
 	Name              string `json:"name"`
 	Version           string `json:"version"`
 	CurrentTime       int64  `json:"currentTime"`
 	LastImmutableTime int    `json:"lastImmutableTime"`
+	HistorySize       int    `json:"historySize"`
+	CommitHash        string `json:"commitHash"`
 }
 
-// HistoryEntry is a struct representing an entry in the history log
+// HistoryResult is the history query response
+type HistoryResult struct {
+	Events     []HistoryEntry `json:"events"`
+	Pagination struct {
+		Offset   int  `json:"offset"`
+		Limit    int  `json:"limit"`
+		MoreData bool `json:"moreData"`
+	} `json:"pagination"`
+}
+
+// HistoryEntry is an entry in the history log
 type HistoryEntry struct {
 	ServerName string `json:"serverName"`
 	EntityType string `json:"entityType"`
@@ -56,7 +68,7 @@ type SceneEntity struct {
 	} `json:"metadata"`
 }
 
-// AuditInfo is a struct that holds entity audit information
+// AuditInfo holds entity audit information
 type AuditInfo struct {
 	DeployedTimestamp int64 `json:"deployedTimestamp"`
 	AuthChain         []struct {
