@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -26,7 +28,7 @@ type Index interface {
 
 // ContentIndexer is the manager of the indexing process
 type ContentIndexer struct {
-	Client        *api.Client
+	Client        *api.CatalystClient
 	DB            *pg.DB
 	Indexes       *[]Index
 	indexWorkers  int
@@ -35,7 +37,7 @@ type ContentIndexer struct {
 
 // NewContentIndexer creates a new indexer
 func NewContentIndexer(
-	client *api.Client,
+	client *api.CatalystClient,
 	db *pg.DB, indexes *[]Index,
 	indexWorkers int,
 	indexInterval int) *ContentIndexer {
@@ -110,7 +112,7 @@ func (indexer *ContentIndexer) processHistory(jobs chan Job) error {
 			break
 		}
 
-		queryOffset += history.Pagination.Offset + history.Pagination.Limit
+		queryOffset = history.Pagination.Offset + history.Pagination.Limit
 	}
 	return nil
 }
@@ -156,6 +158,31 @@ func (indexer *ContentIndexer) runEpoch() error {
 	err = indexer.indexTiles(0)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (indexer *ContentIndexer) downloadScene(dataDir string, sceneID string) error {
+	sceneContents := []models.SceneContent{}
+	err := indexer.DB.Model(&sceneContents).Where("scene_id = ?", sceneID).Select()
+	if err != nil {
+		return err
+	}
+
+	for _, sceneContent := range sceneContents {
+		data, err := indexer.Client.GetContent(sceneContent.ID)
+		if err != nil {
+			return err
+		}
+		dir, _ := filepath.Split(sceneContent.File)
+		os.MkdirAll(filepath.Join(dataDir, sceneID, dir), 0700)
+		file, err := os.Create(filepath.Join(dataDir, sceneID, sceneContent.File))
+		if err != nil {
+			return err
+		}
+		file.Write(data)
+		file.Close()
 	}
 
 	return nil

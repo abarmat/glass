@@ -22,10 +22,12 @@ const (
 	EntityTypeProfile = "profile"
 )
 
-type UrlQueryParams interface {
+// URLQueryParams is an interface for url queries
+type URLQueryParams interface {
 	Map() map[string]string
 }
 
+// GetHistoryParams get history endpoint params
 type GetHistoryParams struct {
 	From       int64
 	To         int64
@@ -57,17 +59,17 @@ func (opts GetHistoryParams) Map() map[string]string {
 	return params
 }
 
-// Client is a client for the Catalyst content API
-type Client struct {
+// CatalystClient is a client for the Catalyst content API
+type CatalystClient struct {
 	endpoint string
 }
 
-// NewClient instantiates a new Client
-func NewClient(endpoint string) *Client {
-	return &Client{endpoint}
+// NewClient instantiates a new CatalystClient
+func NewClient(endpoint string) *CatalystClient {
+	return &CatalystClient{endpoint}
 }
 
-func (client *Client) buildURL(path string, query map[string]string) (*url.URL, error) {
+func (client *CatalystClient) buildURL(path string, query map[string]string) (*url.URL, error) {
 	reqURL, err := url.Parse(client.endpoint + path)
 	if err != nil {
 		return nil, err
@@ -82,7 +84,7 @@ func (client *Client) buildURL(path string, query map[string]string) (*url.URL, 
 	return reqURL, nil
 }
 
-func (client *Client) getJSON(path string, query map[string]string, data interface{}) error {
+func (client *CatalystClient) getJSON(path string, query map[string]string, data interface{}) error {
 	body, err := client.get(path, query)
 	if err == nil {
 		json.Unmarshal(body, data)
@@ -90,7 +92,7 @@ func (client *Client) getJSON(path string, query map[string]string, data interfa
 	return err
 }
 
-func (client *Client) get(path string, query map[string]string) ([]byte, error) {
+func (client *CatalystClient) get(path string, query map[string]string) ([]byte, error) {
 	reqURL, err := client.buildURL(path, query)
 	if err != nil {
 		return nil, err
@@ -112,50 +114,50 @@ func (client *Client) get(path string, query map[string]string) ([]byte, error) 
 }
 
 // GetStatus gets the server status
-func (client *Client) GetStatus() (*ServerStatus, error) {
+func (client *CatalystClient) GetStatus() (*ServerStatus, error) {
 	var data ServerStatus
 	return &data, client.getJSON(getStatusURL, nil, &data)
 }
 
 // GetHistory gets the full node history
-func (client *Client) GetHistory() (*HistoryResult, error) {
+func (client *CatalystClient) GetHistory() (*HistoryResult, error) {
 	return client.GetHistoryWithOpts(GetHistoryParams{})
 }
 
 // GetHistoryWithOpts gets the node history
-func (client *Client) GetHistoryWithOpts(query UrlQueryParams) (*HistoryResult, error) {
+func (client *CatalystClient) GetHistoryWithOpts(query URLQueryParams) (*HistoryResult, error) {
 	var data HistoryResult
 	params := query.Map()
 	return &data, client.getJSON(getHistoryURL, params, &data)
 }
 
 // GetSceneEntityByID gets a scene entity by ID
-func (client *Client) GetSceneEntityByID(entityID string) (*SceneEntity, error) {
+func (client *CatalystClient) GetSceneEntityByID(entityID string) (*SceneEntity, error) {
 	var data []SceneEntity
 	params := map[string]string{"id": entityID}
 	return &data[0], client.getJSON(getSceneEntityURL, params, &data)
 }
 
 // GetSceneEntityByPointer gets a scene entity by pointer
-func (client *Client) GetSceneEntityByPointer(pointer string) (*SceneEntity, error) {
+func (client *CatalystClient) GetSceneEntityByPointer(pointer string) (*SceneEntity, error) {
 	var data []SceneEntity
 	params := map[string]string{"pointer": pointer}
 	return &data[0], client.getJSON(getSceneEntityURL, params, &data)
 }
 
 // GetPointers gets a list of string pointers for an EntityType
-func (client *Client) GetPointers(entityType string) (data []string, err error) {
+func (client *CatalystClient) GetPointers(entityType string) (data []string, err error) {
 	return data, client.getJSON(getPointersURL+"/"+entityType, nil, &data)
 }
 
 // GetContent gets the raw content stored in the server
-func (client *Client) GetContent(hashID string) (data []byte, err error) {
+func (client *CatalystClient) GetContent(hashID string) (data []byte, err error) {
 	data, err = client.get(getContentURL+"/"+hashID, nil)
 	return
 }
 
 // GetAudit gets the audit information for a particular entity
-func (client *Client) GetAudit(entityType string, entityID string) (*AuditInfo, error) {
+func (client *CatalystClient) GetAudit(entityType string, entityID string) (*AuditInfo, error) {
 	var data AuditInfo
 	return &data, client.getJSON(getAuditURL+"/"+entityType+"/"+entityID, nil, &data)
 }
