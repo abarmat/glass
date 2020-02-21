@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -92,29 +93,32 @@ func (indexer *ContentIndexer) indexTiles(from int64) error {
 	return nil
 }
 
-func (indexer *ContentIndexer) processHistory(jobs chan Job) error {
+func (indexer *ContentIndexer) processHistory(ctx context.Context, jobs chan Job) error {
 	queryOffset := 0
 
 	for {
-		log.Printf("(Indexer) Fetching history {offset: %d}", queryOffset)
-		history, err := indexer.Client.GetHistoryWithOpts(api.GetHistoryParams{Offset: queryOffset})
-		if err != nil {
-			return err
-		}
+		select {
+		case <-ctx.Done():
+			return errors.New("Execution interrupted")
+		default:
+			log.Printf("(Indexer) Fetching history {offset: %d}", queryOffset)
+			history, err := indexer.Client.GetHistoryWithOpts(api.GetHistoryParams{Offset: queryOffset})
+			if err != nil {
+				return err
+			}
 
-		log.Printf("(Indexer) Processing %d entries", len((*history).Events))
-		for _, entry := range (*history).Events {
-			job := Job{entry.EntityType, entry.EntityID}
-			jobs <- job
-		}
+			log.Printf("(Indexer) Processing %d entries", len((*history).Events))
+			for _, entry := range (*history).Events {
+				job := Job{entry.EntityType, entry.EntityID}
+				jobs <- job
+			}
+			if !history.Pagination.MoreData {
+				return nil
+			}
 
-		if !history.Pagination.MoreData {
-			break
+			queryOffset = history.Pagination.Offset + history.Pagination.Limit
 		}
-
-		queryOffset = history.Pagination.Offset + history.Pagination.Limit
 	}
-	return nil
 }
 
 func (indexer *ContentIndexer) runWorker(id int, jobs chan Job, wg *sync.WaitGroup) {
@@ -133,7 +137,7 @@ func (indexer *ContentIndexer) runWorker(id int, jobs chan Job, wg *sync.WaitGro
 	}
 }
 
-func (indexer *ContentIndexer) runEpoch() error {
+func (indexer *ContentIndexer) runEpoch(ctx context.Context) error {
 	// start workers to handle indexing
 	log.Printf("(Indexer) Starting %d workers", indexer.indexWorkers)
 	wg := sync.WaitGroup{}
@@ -144,14 +148,13 @@ func (indexer *ContentIndexer) runEpoch() error {
 	}
 
 	// replay history
-	err := indexer.processHistory(jobs)
-	if err != nil {
-		return err
-	}
-
+	err := indexer.processHistory(ctx, jobs)
 	log.Info("(Indexer) Waiting for workers...")
 	close(jobs)
 	wg.Wait()
+	if err != nil {
+		return err
+	}
 
 	// index tiles based on all the data
 	log.Info("(Indexer) Processing tiles...")
@@ -202,9 +205,9 @@ func (indexer *ContentIndexer) Run(ctx context.Context) {
 		default:
 			awakeIndexer := time.Now().Sub(lastRunTimestamp) > indexIntervalSeconds
 			if awakeIndexer {
-				err := indexer.runEpoch()
+				err := indexer.runEpoch(ctx)
 				if err != nil {
-					log.Panic(err)
+					log.Error(err)
 				}
 				lastRunTimestamp = time.Now()
 				continue
