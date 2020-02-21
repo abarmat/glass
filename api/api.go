@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -135,14 +136,28 @@ func (client *CatalystClient) GetHistoryWithOpts(query URLQueryParams) (*History
 func (client *CatalystClient) GetSceneEntityByID(entityID string) (*SceneEntity, error) {
 	var data []SceneEntity
 	params := map[string]string{"id": entityID}
-	return &data[0], client.getJSON(getSceneEntityURL, params, &data)
+	err := client.getJSON(getSceneEntityURL, params, &data)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, errors.New("Not found")
+	}
+	return &data[0], nil
 }
 
 // GetSceneEntityByPointer gets a scene entity by pointer
 func (client *CatalystClient) GetSceneEntityByPointer(pointer string) (*SceneEntity, error) {
 	var data []SceneEntity
 	params := map[string]string{"pointer": pointer}
-	return &data[0], client.getJSON(getSceneEntityURL, params, &data)
+	err := client.getJSON(getSceneEntityURL, params, &data)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, errors.New("Not found")
+	}
+	return &data[0], nil
 }
 
 // GetPointers gets a list of string pointers for an EntityType
